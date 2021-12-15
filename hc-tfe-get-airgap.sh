@@ -81,10 +81,10 @@ function main {
   response=$(curl -s \
   -H "Authorization: Basic ${b64_password}" \
   -H "Accept: application/json" \
-  --write-out "%{http_code}" \
+  --write-out " %{http_code}" \
   "https://api.replicated.com/market/v1/airgap/releases?license_id=${TFE_LICENSE_ID}&show=all")
   rCode=$(echo ${response} | awk '{print $NF}')
-  if [[ ${rCode} != 200 ]]
+  if [[ "${rCode}" != "200" ]]
   then
     log "ERROR" ${FUNCNAME[0]} "Curl to access sequence number list errored with code ${rCode}"
     exit ${rCode}
@@ -99,12 +99,12 @@ function main {
   response=$(curl -s \
   -H "Authorization: Basic ${b64_password}" \
   -H "Accept: application/json" \
-  --write-out "%{http_code}" \
+  --write-out " %{http_code}" \
   "https://api.replicated.com/market/v1/airgap/images/url?license_id=${TFE_LICENSE_ID}&sequence=${release_sequence}")
   rCode=$(echo ${response} | awk '{print $NF}')
-  if [[ ${rCode} != 200 ]]
+  if [[ "${rCode}" != "200" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Curl to access sequence number list errored with code ${rCode}"
+    log "ERROR" ${FUNCNAME[0]} "Curl to access specific sequence number errored with code ${rCode}"
     exit ${rCode}
   else
     replicated_release=$(echo ${response} | awk '{$NF=""; print $0}')
