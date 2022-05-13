@@ -31,9 +31,6 @@ function log {
   elif [ "${level}" == "ERROR" ]
   then
     COL=${bldred}
-  elif [ "${level}" == "DIVIDE" ]
-  then
-    COL=${bldpur}
   elif [ "${level}" == "WARN" ]
   then
     COL=${bldylw}
