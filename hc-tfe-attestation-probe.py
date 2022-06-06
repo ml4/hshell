@@ -65,28 +65,6 @@ class bcolors:
 
 ############################################################################
 #
-# def getKeysByStringPartValue
-#
-############################################################################
-
-## https://thispointer.com/python-how-to-find-keys-by-value-in-dictionary/
-## Get a list of keys from dictionary which has the given value
-#
-def getKeysByStringPartValue(dictOfElements, valueToFind):
-  listOfKeys = list()
-  listOfItems = dictOfElements.items()
-  for item in listOfItems:
-      type(item)
-      # for subStr in item[1].split()
-      #     if subStr == valueToFind:
-      #         listOfKeys.append(item[0])
-
-  return listOfKeys
-#
-## End Func getKeysByStringPartValue
-
-############################################################################
-#
 # def line
 #
 ############################################################################
@@ -112,11 +90,14 @@ def callTFE(QUIET, path):
     print(f'{bcolors.BRed}No TFE API in calling path{bcolors.Endc}')
     exit(1)
 
-  #if not QUIET:
-  #  print(f'{bcolors.BCyan}Calling TFE with {TFE_ADDR}/v1{path}{bcolors.Endc}')
+  if not QUIET:
+   print(f'{bcolors.BCyan}Calling TFE with {TFE_ADDR}/api/v2{path}{bcolors.Endc}')
 
-  headers = {'Authorization': f'Bearer {TFE_TOKEN}'}
-  r = requests.get(f'{TFE_ADDR}/v1{path}', headers=headers, verify=f'{TFE_CACERT}')
+  headers = {
+    'Authorization': f'Bearer {TFE_TOKEN}',
+    'Content-Type':  'application/vnd.api+json'
+  }
+  r = requests.get(f'{TFE_ADDR}/api/v2{path}', headers=headers)
   json = r.json()
   return(json)
 #
@@ -130,16 +111,22 @@ def callTFE(QUIET, path):
 
 ## perform initial tasks such as assess health
 #
-def initTasks(QUIET):
+def initTasks(QUIET, org):
   if not QUIET:
     line()
-    print(f'{bcolors.Default}Initial Tasks:     {bcolors.BWhite}{TFE_ADDR}{bcolors.Endc}')
+    print(f'{bcolors.Default}TFE Address: {bcolors.BWhite}{TFE_ADDR}{bcolors.Endc}')
+    print(f'{bcolors.Default}TFE Token: {bcolors.BWhite}{TFE_TOKEN}{bcolors.Endc}')
+    print(f'{bcolors.Default}TFE CA Cert file: {bcolors.BWhite}{TFE_CACERT}{bcolors.Endc}')
     print()
 
-  ## health
+  ## runs
   #
-  health = callVault(QUIET, f'/sys/health')
-  print(f'{bcolors.Green}health.{bcolors.Default}Initialised:     {bcolors.BWhite}{health["initialized"]}{bcolors.Endc}')
+  workspaces = callTFE(QUIET, f'/organizations/{org}/workspaces')
+  # print(f'{workspaces}')
+  for all in workspaces:
+    for workspace in all:
+      print(f'{bcolors.Green}workspaces.{bcolors.BGreen}Workspace: {workspace}{bcolors.Endc}')
+  # print(f'{bcolors.Green}health.{bcolors.Default}Initialised:     {bcolors.BWhite}{health["initialized"]}{bcolors.Endc}')
   if not QUIET:
     print()
 
@@ -162,6 +149,20 @@ def initTasks(QUIET):
 ## Main
 #
 def main():
+    ## check env vars
+    #
+    if TFE_ADDR is None:
+      print(f'{bcolors.BRed}ERROR: Please export TFE_ADDR as an environment variable{bcolors.Endc}')
+      exit(1)
+
+    if TFE_TOKEN is None:
+      print(f'{bcolors.BRed}ERROR: Please export TFE_TOKEN as an environment variable{bcolors.Endc}')
+      exit(1)
+
+    if TFE_CACERT is None:
+      print(f'{bcolors.BRed}ERROR: Please export TFE_CACERT as an environment variable{bcolors.Endc}')
+      exit(1)
+
     ## create parser
     #
     parser = argparse.ArgumentParser(
@@ -170,13 +171,14 @@ def main():
     )
     optional = parser._action_groups.pop()
 
-    system    = parser.add_argument_group('To just output information about the system as a whole')
-    namespace = parser.add_argument_group('Focus output to a specific namespace')
-    quiet     = parser.add_argument_group('Hide dressing for better pipeline work')
+    org   = parser.add_argument_group('Handle TFE organisations')
+    quiet = parser.add_argument_group('Hide dressing for better pipeline work')
 
     ## add arguments to the parser
     #
-    # system.add_argument('-s', '--system',       action='store_true', help='Output information about the system as a whole, not namespaces-level information')
+    org.add_argument('-o', '--org', type=str, help='Specify the organisation in TFE to use')
+
+    # org.add_argument('-s', '--system',       action='store_true', help='Output information about the system as a whole, not namespaces-level information')
 
     quiet.add_argument('-q', '--quiet',         action='store_true', help='Hide extraneous output')
 
@@ -191,10 +193,12 @@ def main():
     else:
       QUIET = False
 
-    # if arg.system:
-    #   system = True
-    # else:
-    #   system = False
+    if arg.org:
+      org = arg.org
+    else:
+      print(f'{bcolors.BRed}ERROR: Please supply an org name with -o{bcolors.Endc}')
+      exit(1)
+
 
     ## need more time with argparse to work out how to improve this
     #
@@ -203,7 +207,7 @@ def main():
     #   print(f'{bcolors.BCyan}hc-vault-probe.py -h{bcolors.Endc}')
     #   exit(1)
 
-    initTasks(QUIET)
+    initTasks(QUIET, org)
 #
 ## End Func main
 
