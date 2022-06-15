@@ -30,6 +30,9 @@ import json
 
 QUIET = False
 TFE_ADDR = os.getenv('TFE_ADDR')
+if not TFE_ADDR.startswith('https://') and not TFE_ADDR.startswith('http://'):
+    TFE_ADDR = 'https://'+TFE_ADDR
+
 TFE_TOKEN = os.getenv('TFE_TOKEN')
 TFE_CACERT = os.getenv('TFE_CACERT')
 rows, columns = os.popen('stty size', 'r').read().split()
@@ -91,15 +94,17 @@ def callTFE(QUIET, path):
     exit(1)
 
   if not QUIET:
-   print(f'{bcolors.BCyan}Calling TFE with {TFE_ADDR}/api/v2{path}{bcolors.Endc}')
+    print(f'{bcolors.Magenta}Calling TFE with {TFE_ADDR}/api/v2{path}{bcolors.Endc}')
+    print()
 
   headers = {
     'Authorization': f'Bearer {TFE_TOKEN}',
     'Content-Type':  'application/vnd.api+json'
   }
   r = requests.get(f'{TFE_ADDR}/api/v2{path}', headers=headers)
-  json = r.json()
-  return(json)
+  j = r.json()
+  print(f'{json.dumps(j)}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
+  return(j)
 #
 ## End Func callVault
 
@@ -114,22 +119,42 @@ def callTFE(QUIET, path):
 def initTasks(QUIET, org):
   if not QUIET:
     line()
-    print(f'{bcolors.Default}TFE Address: {bcolors.BWhite}{TFE_ADDR}{bcolors.Endc}')
-    print(f'{bcolors.Default}TFE Token: {bcolors.BWhite}{TFE_TOKEN}{bcolors.Endc}')
+    print(f'{bcolors.Default}TFE Address:      {bcolors.BWhite}{TFE_ADDR}{bcolors.Endc}')
+    print(f'{bcolors.Default}TFE Token:        {bcolors.BWhite}{TFE_TOKEN}{bcolors.Endc}')
     print(f'{bcolors.Default}TFE CA Cert file: {bcolors.BWhite}{TFE_CACERT}{bcolors.Endc}')
     print()
 
   ## runs
   #
-  workspaces = callTFE(QUIET, f'/organizations/{org}/workspaces')
-  # print(f'{workspaces}')
-  for all in workspaces:
-    for workspace in all:
-      print(f'{bcolors.Green}workspaces.{bcolors.BGreen}Workspace: {workspace}{bcolors.Endc}')
-  # print(f'{bcolors.Green}health.{bcolors.Default}Initialised:     {bcolors.BWhite}{health["initialized"]}{bcolors.Endc}')
+  workspaces = {}
+  blob = callTFE(QUIET, f'/organizations/{org}/workspaces')
+  for array_obj in blob["data"]:
+    workspaces[array_obj["attributes"]["name"]] = {
+      'id':                  f'{array_obj["id"]}',
+      'auto-apply':          f'{array_obj["attributes"]["auto-apply"]}',
+      'created-at':          f'{array_obj["attributes"]["created-at"]}',
+      'locked':              f'{array_obj["attributes"]["locked"]}',
+      'speculative-enabled': f'{array_obj["attributes"]["speculative-enabled"]}',
+      'terraform-version':   f'{array_obj["attributes"]["terraform-version"]}',
+      'global-remote-state': f'{array_obj["attributes"]["global-remote-state"]}',
+      'resource-count':      f'{array_obj["attributes"]["resource-count"]}',
+    }
+  for key in sorted(workspaces):
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}Name:                {bcolors.BMagenta}{key}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}ID:                  {bcolors.BCyan}{workspaces[key]["id"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}TF Version:          {workspaces[key]["terraform-version"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}Created:             {workspaces[key]["created-at"]}{bcolors.Endc}')
+    if workspaces[key]["locked"] == "True":
+      colour = f'{bcolors.BRed}'
+    else:
+      colour = f'{bcolors.BGreen}'
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}Locked:              {colour}{workspaces[key]["locked"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}Speculative Enabled: {workspaces[key]["speculative-enabled"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}Global Remote State: {workspaces[key]["global-remote-state"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}Num Resources:       {workspaces[key]["resource-count"]}{bcolors.Endc}')
+    print()
   if not QUIET:
     print()
-
 #
 ## End Func initTasks
 
@@ -152,7 +177,7 @@ def main():
     ## check env vars
     #
     if TFE_ADDR is None:
-      print(f'{bcolors.BRed}ERROR: Please export TFE_ADDR as an environment variable{bcolors.Endc}')
+      print(f'{bcolors.BRed}ERROR: Please export TFE_ADDR as an environment variable in the form https://dev-tfe.hsbc.com{bcolors.Endc}')
       exit(1)
 
     if TFE_TOKEN is None:
@@ -160,7 +185,7 @@ def main():
       exit(1)
 
     if TFE_CACERT is None:
-      print(f'{bcolors.BRed}ERROR: Please export TFE_CACERT as an environment variable{bcolors.Endc}')
+      print(f'{bcolors.BRed}ERROR: Please export local path to TFE_CACERT as an environment variable{bcolors.Endc}')
       exit(1)
 
     ## create parser
