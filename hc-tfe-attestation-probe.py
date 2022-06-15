@@ -159,9 +159,14 @@ def runReport(QUIET, DEBUG, org):
     #
     runBlob = callTFE(QUIET, DEBUG, f'/workspaces/{workspaces[key]["id"]}/runs?page%5Bsize%5D=1')
     if len(runBlob["data"]) == 0:
-      print(f'{bcolors.Green}run.{bcolors.BCyan}Previous:                  {bcolors.BYellow}No runs yet{bcolors.Endc}')
+      print(f'{bcolors.Green}run.{bcolors.BCyan}Last Run:                  {bcolors.BYellow}No runs yet{bcolors.Endc}')
     else:
-      print(f'{bcolors.Green}run.{bcolors.BCyan}Previous:                  {bcolors.BCyan}{runBlob["data"][0]["id"]}{bcolors.Endc}')
+      print(f'{bcolors.Green}run.{bcolors.BCyan}Last Run:                  {bcolors.BCyan}{runBlob["data"][0]["id"]}{bcolors.Endc}')
+      if runBlob["data"][0]["relationships"]["created-by"]["data"]["id"]:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Created by:                {bcolors.BBlue}{runBlob["data"][0]["relationships"]["created-by"]["data"]["id"]}{bcolors.Endc}')
+      else:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Created by:                {bcolors.BRed}No user found!{bcolors.Endc}')
+
       if runBlob["data"][0]["attributes"]["canceled-at"]:
         print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                  {bcolors.BYellow}{runBlob["data"][0]["attributes"]["canceled-at"]}{bcolors.Endc}')
       else:
@@ -208,9 +213,9 @@ def runReport(QUIET, DEBUG, org):
         print(f'{bcolors.Green}run.{bcolors.BCyan}Confirmed:                 {bcolors.BYellow}Not Confirmed{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applied-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applied-at"]} OUTCOME: {bcolors.BGreen}APPLIED{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BYellow}Not Applied{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BCyan}OUTCOME: {bcolors.BYellow}NOT APPLIED{bcolors.Endc}')
     print()
   if not QUIET:
     print()
