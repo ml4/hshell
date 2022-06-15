@@ -88,12 +88,12 @@ def line():
 
 ## call TFE and return json object
 #
-def callTFE(QUIET, path):
+def callTFE(QUIET, DEBUG, path):
   if not path:
     print(f'{bcolors.BRed}No TFE API in calling path{bcolors.Endc}')
     exit(1)
 
-  if not QUIET:
+  if not QUIET and DEBUG:
     print(f'{bcolors.Magenta}Calling TFE with {TFE_ADDR}/api/v2{path}{bcolors.Endc}')
     print()
 
@@ -103,32 +103,34 @@ def callTFE(QUIET, path):
   }
   r = requests.get(f'{TFE_ADDR}/api/v2{path}', headers=headers)
   j = r.json()
-  print(f'{json.dumps(j)}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
+  if DEBUG:
+    print(f'{json.dumps(j)}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
   return(j)
 #
 ## End Func callVault
 
 ############################################################################
 #
-# def initTasks
+# def runReport
 #
 ############################################################################
 
 ## perform initial tasks such as assess health
 #
-def initTasks(QUIET, org):
+def runReport(QUIET, DEBUG, org):
   if not QUIET:
     line()
     print(f'{bcolors.Default}TFE Address:      {bcolors.BWhite}{TFE_ADDR}{bcolors.Endc}')
-    print(f'{bcolors.Default}TFE Token:        {bcolors.BWhite}{TFE_TOKEN}{bcolors.Endc}')
     print(f'{bcolors.Default}TFE CA Cert file: {bcolors.BWhite}{TFE_CACERT}{bcolors.Endc}')
+    if DEBUG:
+      print(f'{bcolors.Default}TFE Token:        {bcolors.BWhite}{TFE_TOKEN}{bcolors.Endc}')
     print()
 
-  ## runs
+  ## Initial workspace items
   #
   workspaces = {}
-  blob = callTFE(QUIET, f'/organizations/{org}/workspaces')
-  for array_obj in blob["data"]:
+  workspaceblob = callTFE(QUIET, DEBUG, f'/organizations/{org}/workspaces')
+  for array_obj in workspaceblob["data"]:
     workspaces[array_obj["attributes"]["name"]] = {
       'id':                  f'{array_obj["id"]}',
       'auto-apply':          f'{array_obj["attributes"]["auto-apply"]}',
@@ -151,12 +153,90 @@ def initTasks(QUIET, org):
     print(f'{bcolors.Green}workspace.{bcolors.BGreen}Locked:              {colour}{workspaces[key]["locked"]}{bcolors.Endc}')
     print(f'{bcolors.Green}workspace.{bcolors.BGreen}Speculative Enabled: {workspaces[key]["speculative-enabled"]}{bcolors.Endc}')
     print(f'{bcolors.Green}workspace.{bcolors.BGreen}Global Remote State: {workspaces[key]["global-remote-state"]}{bcolors.Endc}')
-    print(f'{bcolors.Green}workspace.{bcolors.BGreen}Num Resources:       {workspaces[key]["resource-count"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.BGreen}Resources in State:  {workspaces[key]["resource-count"]}{bcolors.Endc}')
+    #
+    ## Run data
+    #
+    runBlob = callTFE(QUIET, DEBUG, f'/workspaces/{workspaces[key]["id"]}/runs?page%5Bsize%5D=1')
+    if len(runBlob["data"]) == 0:
+      print(f'{bcolors.Green}run.{bcolors.BCyan}Previous:                  {bcolors.BYellow}No runs yet{bcolors.Endc}')
+    else:
+      print(f'{bcolors.Green}run.{bcolors.BCyan}Previous:                  {bcolors.BCyan}{runBlob["data"][0]["id"]}{bcolors.Endc}')
+      if runBlob["data"][0]["attributes"]["canceled-at"]:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                  {bcolors.BYellow}{runBlob["data"][0]["attributes"]["canceled-at"]}{bcolors.Endc}')
+      else:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                  {bcolors.BCyan}Not canceled{bcolors.Endc}')
+
+      if runBlob["data"][0]["attributes"]["created-at"] is None:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Created:                   {bcolors.BYellow}Not Created{bcolors.Endc}')
+      else:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Created:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["created-at"]}{bcolors.Endc}')
+
+      try:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queueable:            {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["plan-queueable-at"]}{bcolors.Endc}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queueable:            {bcolors.BYellow}Not Queueable{bcolors.Endc}')
+
+      try:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queued:               {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["plan-queued-at"]}{bcolors.Endc}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queued:               {bcolors.BYellow}Not Queued{bcolors.Endc}')
+
+      try:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Planning:                  {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["planning-at"]}{bcolors.Endc}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Planning:                  {bcolors.BYellow}Not Planned{bcolors.Endc}')
+
+      try:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Planned:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["planned-at"]}{bcolors.Endc}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Planned:                   {bcolors.BYellow}Not Planned{bcolors.Endc}')
+
+      try:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Apply Queued:              {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["apply-queued-at"]}{bcolors.Endc}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Apply Queued:              {bcolors.BYellow}No Apply Queued{bcolors.Endc}')
+
+      try:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applying:                  {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applying-at"]}{bcolors.Endc}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applying:                  {bcolors.BYellow}Not Applied{bcolors.Endc}')
+
+      try:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Confirmed:                 {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["confirmed-at"]}{bcolors.Endc}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Confirmed:                 {bcolors.BYellow}Not Confirmed{bcolors.Endc}')
+
+      try:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applied-at"]}{bcolors.Endc}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BYellow}Not Applied{bcolors.Endc}')
     print()
   if not QUIET:
     print()
+
+  # ## Get most recent workspace run
+  # #
+  # for key in sorted(workspaces):
+  #   blob = callTFE(QUIET, f'/workspaces/{workspaces[key]["id"]}/runs?page%5Bsize%5D=1')
+  #   #
+  #   ## use array even though we only want the most recent run in case we start to iterate more than one run back
+  #   #
+  #   for array_obj in blob["data"]:
+  #     workspaces[array_obj["id"]] = {
+  #       'created-at':        f'{array_obj["attributes"]["created-at"]}',
+  #       'plan-queueable-at': f'{array_obj["attributes"]["plan-queueable-at"]}',
+  #       'plan-queued-at':    f'{array_obj["attributes"]["plan-queued-at"]}',
+  #       'planning-at':       f'{array_obj["attributes"]["planning-at"]}',
+  #       'planned-at':        f'{array_obj["attributes"]["planned-at"]}',
+  #       'apply-queued-at':   f'{array_obj["attributes"]["apply-queued-at"]}',
+  #       'applying-at':       f'{array_obj["attributes"]["applying-at"]}',
+  #       'confirmed-at':      f'{array_obj["attributes"]["confirmed-at"]}',
+  #       'applied-at':        f'{array_obj["attributes"]["applied-at"]}',
+  #     }
+
 #
-## End Func initTasks
+## End Func runReport
 
 ############################################################################
 #
@@ -198,14 +278,13 @@ def main():
 
     org   = parser.add_argument_group('Handle TFE organisations')
     quiet = parser.add_argument_group('Hide dressing for better pipeline work')
+    debug = parser.add_argument_group('Add outputs of debug information')
 
     ## add arguments to the parser
     #
     org.add_argument('-o', '--org', type=str, help='Specify the organisation in TFE to use')
-
-    # org.add_argument('-s', '--system',       action='store_true', help='Output information about the system as a whole, not namespaces-level information')
-
     quiet.add_argument('-q', '--quiet',         action='store_true', help='Hide extraneous output')
+    debug.add_argument('-d', '--debug',         action='store_true', help='Output debug output')
 
     parser._action_groups.append(optional)
 
@@ -217,6 +296,11 @@ def main():
       QUIET = True
     else:
       QUIET = False
+
+    if arg.debug:
+      DEBUG = True
+    else:
+      DEBUG = False
 
     if arg.org:
       org = arg.org
@@ -232,7 +316,7 @@ def main():
     #   print(f'{bcolors.BCyan}hc-vault-probe.py -h{bcolors.Endc}')
     #   exit(1)
 
-    initTasks(QUIET, org)
+    runReport(QUIET, DEBUG, org)
 #
 ## End Func main
 
