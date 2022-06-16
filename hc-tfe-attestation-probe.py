@@ -10,17 +10,13 @@
 #######################################################################################################################
 
 import argparse
+import shutil
 import os
 import requests
 import json
-
-#import subprocess
-#import re
-#import random
-#import signal
-#import datetime
-#import sys
-#import glob
+import zlib
+import tarfile
+import difflib
 
 ############################################################################
 #
@@ -36,6 +32,13 @@ if not TFE_ADDR.startswith('https://') and not TFE_ADDR.startswith('http://'):
 TFE_TOKEN = os.getenv('TFE_TOKEN')
 TFE_CACERT = os.getenv('TFE_CACERT')
 rows, columns = os.popen('stty size', 'r').read().split()
+
+## /var/tmp used as CIS benchmarking compliance means /tmp noexec
+#
+cv0tgzDir  = '/var/tmp/cv0'
+cv1tgzDir  = '/var/tmp/cv1'
+cv0tgzPath = '/var/tmp/cv0blob.tgz'
+cv1tgzPath = '/var/tmp/cv1blob.tgz'
 
 ############################################################################
 #
@@ -68,19 +71,57 @@ class bcolors:
 
 ############################################################################
 #
-# def line
+# def drawLine
 #
 ############################################################################
 
 ## output a line the width of the terminal
 #
-def line():
+def drawLine():
   print(f'{bcolors.Default}')
   line = '#' * int(columns)
   print(line)
   print()
 #
-## End Func line
+## End Func drawLine
+
+############################################################################
+#
+# def handleDirectories
+#
+############################################################################
+
+def handleDirectories(DEBUG, handle):
+  if handle == 'create':
+    for dir in [ cv0tgzDir, cv1tgzDir ]:
+      try:
+        if DEBUG:
+          drawLine()
+          print(f'{bcolors.Magenta}Creating temporary directory: {dir}{bcolors.Endc}')
+        os.mkdir(dir)
+      except OSError as error:
+        print()
+        print(f'{bcolors.BRed}handleDirectories ERROR failed to {handle} {dir}:{bcolors.Endc}')
+        print(error)
+        exit(1)
+  elif handle == 'delete':
+    for dir in [ cv0tgzDir, cv1tgzDir ]:
+      try:
+        if DEBUG:
+          drawLine()
+          print(f'{bcolors.Magenta}Deleting temporary directory: {dir}{bcolors.Endc}')
+        shutil.rmtree(dir, ignore_errors = False)
+      except OSError as error:
+        print()
+        print(f'{bcolors.BRed}handleDirectories ERROR failed to {handle} {dir}:{bcolors.Endc}')
+        print(error)
+        exit(1)
+  else:
+    print()
+    print(f'{bcolors.BRed}handleDirectories ERROR internally: handle is {handle}{bcolors.Endc}')
+    exit(1)
+#
+## End Func handleDirectories
 
 ############################################################################
 #
@@ -90,7 +131,7 @@ def line():
 
 ## call TFE and return json object
 #
-def callTFE(QUIET, DEBUG, path):
+def callTFE(QUIET, DEBUG, path, downloadPath=''):
   if not path:
     print(f'{bcolors.BRed}No TFE API in calling path{bcolors.Endc}')
     exit(1)
@@ -103,13 +144,38 @@ def callTFE(QUIET, DEBUG, path):
     'Authorization': f'Bearer {TFE_TOKEN}',
     'Content-Type':  'application/vnd.api+json'
   }
-  r = requests.get(f'{TFE_ADDR}/api/v2{path}', headers=headers)
-  j = r.json()
-  if DEBUG:
-    print(f'{json.dumps(j)}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
-  return(j)
+  try:
+    response = requests.get(f'{TFE_ADDR}/api/v2{path}', headers=headers)
+  except Exception as e:
+    print()
+    print(f'{bcolors.BRed}ERROR with requests to {TFE_ADDR}/api/v2{path}:')
+    print(e)
+    print(f'{bcolors.Endc}')
+    exit(1)
+
+  ## detect output gzip file (which is the only type this script handles) or marshall
+  #
+  if not downloadPath:
+    j = response.json()
+    if DEBUG:
+      print()
+      print(f'{json.dumps(j)}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
+      print()
+    return(j)
+  else:
+    try:
+      data = zlib.decompress(response.content, zlib.MAX_WBITS|32)
+      with open(downloadPath,'wb') as outFile:
+        outFile.write(data)
+    except Exception as e:
+      print()
+      print(f'{bcolors.BRed}ERROR writing to {downloadPath}:')
+      print(e)
+      print(f'{bcolors.Endc}')
+      exit(1)
+    return('OK')
 #
-## End Func callVault
+## End Func callTFE
 
 ############################################################################
 #
@@ -121,7 +187,7 @@ def callTFE(QUIET, DEBUG, path):
 #
 def runReport(QUIET, DEBUG, org):
   if not QUIET:
-    line()
+    drawLine()
     print(f'{bcolors.Green}TFE.{bcolors.Default}Address:         {bcolors.BWhite}{TFE_ADDR}{bcolors.Endc}')
     print(f'{bcolors.Green}TFE.{bcolors.Default}CA Cert file:    {bcolors.BWhite}{TFE_CACERT}{bcolors.Endc}')
     if DEBUG:
@@ -138,23 +204,23 @@ def runReport(QUIET, DEBUG, org):
     print(f'{bcolors.BRed}ERROR: Your TFE release version ({releaseBlob["release"]}) needs to be >= 202203-1 in order to be able to download the configuration versions required to putative understand changes. Exiting here')
     exit(1)
   if not QUIET:
-    line()
-
+    drawLine()
 
   ## Initial workspace items
   #
   workspaces = {}
-  workspaceblob = callTFE(QUIET, DEBUG, f'/organizations/{org}/workspaces')
-  for array_obj in workspaceblob["data"]:
+  workspaceBlob = callTFE(QUIET, DEBUG, f'/organizations/{org}/workspaces')
+  for array_obj in workspaceBlob["data"]:
     workspaces[array_obj["attributes"]["name"]] = {
-      'id':                  f'{array_obj["id"]}',
-      'auto-apply':          f'{array_obj["attributes"]["auto-apply"]}',
-      'created-at':          f'{array_obj["attributes"]["created-at"]}',
-      'locked':              f'{array_obj["attributes"]["locked"]}',
-      'speculative-enabled': f'{array_obj["attributes"]["speculative-enabled"]}',
-      'terraform-version':   f'{array_obj["attributes"]["terraform-version"]}',
-      'global-remote-state': f'{array_obj["attributes"]["global-remote-state"]}',
-      'resource-count':      f'{array_obj["attributes"]["resource-count"]}',
+      'id':                      f'{array_obj["id"]}',
+      'auto-apply':              f'{array_obj["attributes"]["auto-apply"]}',
+      'created-at':              f'{array_obj["attributes"]["created-at"]}',
+      'locked':                  f'{array_obj["attributes"]["locked"]}',
+      'speculative-enabled':     f'{array_obj["attributes"]["speculative-enabled"]}',
+      'terraform-version':       f'{array_obj["attributes"]["terraform-version"]}',
+      'global-remote-state':     f'{array_obj["attributes"]["global-remote-state"]}',
+      'resource-count':          f'{array_obj["attributes"]["resource-count"]}',
+      'can-read-state-versions': f'{array_obj["attributes"]["permissions"]["can-read-state-versions"]}'
     }
   for key in sorted(workspaces):
     print(f'{bcolors.Green}workspace.{bcolors.Default}Name:                {bcolors.BMagenta}{key}{bcolors.Endc}')
@@ -224,13 +290,72 @@ def runReport(QUIET, DEBUG, org):
           print(f'{bcolors.Green}run.{bcolors.BCyan}Previous CV:               {bcolors.BCyan}{cv1}{bcolors.Endc}')
           print(f'{bcolors.Green}run.{bcolors.BCyan}Previous CV Download:      {bcolors.BCyan}{cv1download}{bcolors.Endc}')
 
-        cv0blob = callTFE(QUIET, DEBUG, f'/configuration-version/{cv0}/download')
-        cv1blob = callTFE(QUIET, DEBUG, f'/configuration-version/{cv1}/download')
+        cv0blobDownloadCheck = callTFE(QUIET, DEBUG, f'/configuration-versions/{cv0}/download', cv0tgzPath)
+        if cv0blobDownloadCheck != 'OK':
+          print(f'{bcolors.BRed}ERROR: Download configuration version 0 {cv0} failed.{bcolors.Endc}. Exiting here')
+          exit(1)
+        cv1blobDownloadCheck = callTFE(QUIET, DEBUG, f'/configuration-versions/{cv1}/download', cv1tgzPath)
+        if cv0blobDownloadCheck != 'OK':
+          print(f'{bcolors.BRed}ERROR: Download configuration version 0 {cv0} failed.{bcolors.Endc}. Exiting here')
+          exit(1)
 
-        print(f'{cv0blob}')
-        print()
-        print(f'{cv1blob}')
-        print()
+        ## untar both tgz files and diff
+        #
+        print(f'{bcolors.Green}config.{bcolors.BCyan}Configuration Changes:{bcolors.Endc}')
+        try:
+          cv0tgzFH = tarfile.open(cv0tgzPath)
+        except Exception as error:
+          print(f'{bcolors.BRed}ERROR: Failed to open tar file {cv0tgzPath}.{bcolors.Endc}. Exiting here')
+          print(error)
+          print(f'{bcolors.Endc}')
+          exit(1)
+        try:
+          cv1tgzFH = tarfile.open(cv1tgzPath)
+        except Exception as error:
+          print(f'{bcolors.BRed}ERROR: Failed to open tar file {cv1tgzPath}.{bcolors.Endc}. Exiting here')
+          print(error)
+          print(f'{bcolors.Endc}')
+          exit(1)
+
+        ## extract dumps
+        #
+        try:
+          cv0tgzFH.extractall(cv0tgzDir)
+          cv0tgzFH.close()
+        except FileExistsError as error:
+          print(f'{bcolors.BRed}ERROR: Failed to extract configuration tar file {cv0tgzPath}.{bcolors.Endc}. Exiting here')
+          print(error)
+          print(f'{bcolors.Endc}')
+          exit(1)
+
+        try:
+          cv1tgzFH.extractall(cv1tgzDir)
+          cv1tgzFH.close()
+        except FileExistsError as error:
+          print(f'{bcolors.BRed}ERROR: Failed to extract configuration tar file {cv1tgzPath}.{bcolors.Endc}. Exiting here')
+          print(error)
+          print(f'{bcolors.Endc}')
+          exit(1)
+
+        try:
+          os.remove(cv0tgzPath)
+          os.remove(cv1tgzPath)
+        except Exception as error:
+          print(f'{bcolors.BRed}ERROR: Failed to remove configuration tar files {cv0tgzPath} and {cv1tgzPath}.{bcolors.Endc}. Exiting here')
+          print(error)
+          print(f'{bcolors.Endc}')
+          exit(1)
+
+        ## diff dirs
+        #
+        try:
+          for line in difflib.unified_diff(cv0tgzDir, cv1tgzDir, fromfile=cv0tgzDir, tofile=cv1tgzDir, lineterm='', n=0):
+            print(line)
+        except Exception as error:
+          print(f'{bcolors.BRed}ERROR: Failed to diff configurations {cv0tgzDir} and {cv1tgzDir}.{bcolors.Endc}. Exiting here')
+          print(error)
+          print(f'{bcolors.Endc}')
+          exit(1)
 
       try:
         print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                  {bcolors.BYellow}{runBlob["data"][0]["attributes"]["canceled-at"]}{bcolors.Endc}')
@@ -289,30 +414,15 @@ def runReport(QUIET, DEBUG, org):
           print(f'{bcolors.Green}run.{bcolors.BCyan}Status (Outcome):          {bcolors.BYellow}{runBlob["data"][0]["attributes"]["status"]}{bcolors.Endc}')
       except KeyError:
         print(f'{bcolors.Green}run.{bcolors.BCyan}Status (Outcome):          {bcolors.BRed}UNKNOWN{bcolors.Endc}')
+      #
+      ## If state changed then diff from the previous run - essentially repeat the equivalent from the configuration version diffs from above
+      #
+      # try:
+      #   if
+
     print()
   if not QUIET:
     print()
-
-  # ## Get most recent workspace run
-  # #
-  # for key in sorted(workspaces):
-  #   blob = callTFE(QUIET, f'/workspaces/{workspaces[key]["id"]}/runs?page%5Bsize%5D=1')
-  #   #
-  #   ## use array even though we only want the most recent run in case we start to iterate more than one run back
-  #   #
-  #   for array_obj in blob["data"]:
-  #     workspaces[array_obj["id"]] = {
-  #       'created-at':        f'{array_obj["attributes"]["created-at"]}',
-  #       'plan-queueable-at': f'{array_obj["attributes"]["plan-queueable-at"]}',
-  #       'plan-queued-at':    f'{array_obj["attributes"]["plan-queued-at"]}',
-  #       'planning-at':       f'{array_obj["attributes"]["planning-at"]}',
-  #       'planned-at':        f'{array_obj["attributes"]["planned-at"]}',
-  #       'apply-queued-at':   f'{array_obj["attributes"]["apply-queued-at"]}',
-  #       'applying-at':       f'{array_obj["attributes"]["applying-at"]}',
-  #       'confirmed-at':      f'{array_obj["attributes"]["confirmed-at"]}',
-  #       'applied-at':        f'{array_obj["attributes"]["applied-at"]}',
-  #     }
-
 #
 ## End Func runReport
 
@@ -394,7 +504,11 @@ def main():
     #   print(f'{bcolors.BCyan}hc-vault-probe.py -h{bcolors.Endc}')
     #   exit(1)
 
+    ## handle temporary configuration directories and call
+    #
+    handleDirectories(DEBUG, 'create')
     runReport(QUIET, DEBUG, org)
+    handleDirectories(DEBUG, 'delete')
 #
 ## End Func main
 
