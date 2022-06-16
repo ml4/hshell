@@ -24,13 +24,10 @@ import difflib
 #
 ############################################################################
 
-QUIET = False
-TFE_ADDR = os.getenv('TFE_ADDR')
-if not TFE_ADDR.startswith('https://') and not TFE_ADDR.startswith('http://'):
-    TFE_ADDR = 'https://'+TFE_ADDR
-
-TFE_TOKEN = os.getenv('TFE_TOKEN')
-TFE_CACERT = os.getenv('TFE_CACERT')
+QUIET         = False
+TFE_ADDR      = os.getenv('TFE_ADDR')
+TFE_TOKEN     = os.getenv('TFE_TOKEN')
+TFE_CACERT    = os.getenv('TFE_CACERT')
 rows, columns = os.popen('stty size', 'r').read().split()
 
 ## /var/tmp used as CIS benchmarking compliance means /tmp noexec
@@ -429,6 +426,8 @@ def runReport(QUIET, DEBUG, org):
         print(f'{bcolors.Endc}')
         exit(1)
 
+      ## state data
+      #
       try:
         if stateVersionsBlob["data"][0]["id"]:
           print(f'{bcolors.Green}state.{bcolors.BCyan}Latest State Version ID:     {bcolors.BBlue}{stateVersionsBlob["data"][0]["id"]}{bcolors.Endc}')
@@ -466,11 +465,19 @@ def runReport(QUIET, DEBUG, org):
 ## Main
 #
 def main():
+    global QUIET
+    global TFE_ADDR
+    global TFE_TOKEN
+    global TFE_CACERT
+
     ## check env vars
     #
     if TFE_ADDR is None:
-      print(f'{bcolors.BRed}ERROR: Please export TFE_ADDR as an environment variable in the form https://dev-tfe.hsbc.com{bcolors.Endc}')
+      print(f'{bcolors.BRed}ERROR: Please export TFE_ADDR as an environment variable in the form https://dev-tfe.mydomain.com{bcolors.Endc}')
       exit(1)
+
+    if not TFE_ADDR.startswith('https://') and not TFE_ADDR.startswith('http://'):
+      TFE_ADDR = 'https://'+TFE_ADDR
 
     if TFE_TOKEN is None:
       print(f'{bcolors.BRed}ERROR: Please export TFE_TOKEN as an environment variable{bcolors.Endc}')
