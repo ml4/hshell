@@ -203,8 +203,6 @@ def runReport(QUIET, DEBUG, org):
     print()
     print(f'{bcolors.BRed}ERROR: Your TFE release version ({releaseBlob["release"]}) needs to be >= 202203-1 in order to be able to download the configuration versions required to putative understand changes. Exiting here')
     exit(1)
-  if not QUIET:
-    drawLine()
 
   ## Initial workspace items
   #
@@ -220,38 +218,41 @@ def runReport(QUIET, DEBUG, org):
       'terraform-version':       f'{array_obj["attributes"]["terraform-version"]}',
       'global-remote-state':     f'{array_obj["attributes"]["global-remote-state"]}',
       'resource-count':          f'{array_obj["attributes"]["resource-count"]}',
-      'can-read-state-versions': f'{array_obj["attributes"]["permissions"]["can-read-state-versions"]}'
+      'can-read-state-versions': f'{array_obj["attributes"]["permissions"]["can-read-state-versions"]}',
+      'current-state-version':   f'{array_obj["relationships"]["current-state-version"]}',
     }
   for key in sorted(workspaces):
-    print(f'{bcolors.Green}workspace.{bcolors.Default}Name:                {bcolors.BMagenta}{key}{bcolors.Endc}')
-    print(f'{bcolors.Green}workspace.{bcolors.Default}ID:                  {bcolors.BCyan}{workspaces[key]["id"]}{bcolors.Endc}')
-    print(f'{bcolors.Green}workspace.{bcolors.Default}TF Version:          {workspaces[key]["terraform-version"]}{bcolors.Endc}')
-    print(f'{bcolors.Green}workspace.{bcolors.Default}Created:             {workspaces[key]["created-at"]}{bcolors.Endc}')
+    if not QUIET:
+      drawLine()
+    print(f'{bcolors.Green}workspace.{bcolors.Default}Name:                   {bcolors.BMagenta}{key}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.Default}ID:                     {bcolors.BCyan}{workspaces[key]["id"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.Default}TF Version:             {workspaces[key]["terraform-version"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.Default}Created:                {workspaces[key]["created-at"]}{bcolors.Endc}')
     if workspaces[key]["locked"] == "True":
       colour = f'{bcolors.BRed}'
     else:
       colour = f'{bcolors.Default}'
-    print(f'{bcolors.Green}workspace.{bcolors.Default}Locked:              {colour}{workspaces[key]["locked"]}{bcolors.Endc}')
-    print(f'{bcolors.Green}workspace.{bcolors.Default}Speculative Enabled: {workspaces[key]["speculative-enabled"]}{bcolors.Endc}')
-    print(f'{bcolors.Green}workspace.{bcolors.Default}Global Remote State: {workspaces[key]["global-remote-state"]}{bcolors.Endc}')
-    print(f'{bcolors.Green}workspace.{bcolors.Default}Resources in State:  {workspaces[key]["resource-count"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.Default}Locked:                 {colour}{workspaces[key]["locked"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.Default}Speculative Enabled:    {workspaces[key]["speculative-enabled"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.Default}Global Remote State:    {workspaces[key]["global-remote-state"]}{bcolors.Endc}')
+    print(f'{bcolors.Green}workspace.{bcolors.Default}Resources in State:     {workspaces[key]["resource-count"]}{bcolors.Endc}')
     #
     ## Run data
     #
     runBlob = callTFE(QUIET, DEBUG, f'/workspaces/{workspaces[key]["id"]}/runs?page%5Bsize%5D=1')
     if len(runBlob["data"]) == 0:
-      print(f'{bcolors.Green}run.{bcolors.BCyan}Last Run:                  {bcolors.BYellow}No runs yet{bcolors.Endc}')
+      print(f'{bcolors.Green}run.{bcolors.BCyan}Last Run:                     {bcolors.BYellow}No runs yet{bcolors.Endc}')
     else:
-      print(f'{bcolors.Green}run.{bcolors.BCyan}Last Run:                  {bcolors.BCyan}{runBlob["data"][0]["id"]}{bcolors.Endc}')
+      print(f'{bcolors.Green}run.{bcolors.BCyan}Last Run:                     {bcolors.BCyan}{runBlob["data"][0]["id"]}{bcolors.Endc}')
       if runBlob["data"][0]["relationships"]["created-by"]["data"]["id"]:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Created by:                {bcolors.BBlue}{runBlob["data"][0]["relationships"]["created-by"]["data"]["id"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Created by:                   {bcolors.BBlue}{runBlob["data"][0]["relationships"]["created-by"]["data"]["id"]}{bcolors.Endc}')
       else:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Created by:                {bcolors.BRed}No user found!{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Created by:                   {bcolors.BRed}No user found!{bcolors.Endc}')
 
-      if runBlob["data"][0]["relationships"]["configuration-version"]["data"]["id"]:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Configuration Version:     {bcolors.BBlue}{runBlob["data"][0]["relationships"]["configuration-version"]["data"]["id"]}{bcolors.Endc}')
-      else:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Configuration Version:     {bcolors.BRed}No configuration version found!{bcolors.Endc}')
+      # if runBlob["data"][0]["relationships"]["configuration-version"]["data"]["id"]:
+      #   print(f'{bcolors.Green}run.{bcolors.BCyan}Configuration Version:        {bcolors.BBlue}{runBlob["data"][0]["relationships"]["configuration-version"]["data"]["id"]}{bcolors.Endc}')
+      # else:
+      #   print(f'{bcolors.Green}run.{bcolors.BCyan}Configuration Version:        {bcolors.BRed}No configuration version found!{bcolors.Endc}')
       #
       ## if we have a configuration that begins with 'cv', hit the API again and get the configuration version data:
       ##   - as we have a configuration version, get a list of configuration versions and ensure there are two
@@ -272,7 +273,7 @@ def runReport(QUIET, DEBUG, org):
           else:
             multipleCV = True
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Configuration Versions:    {bcolors.BRed}List Not Found{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Configuration Versions:       {bcolors.BRed}List Not Found{bcolors.Endc}')
 
       if multipleCV == True:
         # OK we have >1 configuration versions: get the second one in the array (1) - we already have element 0, but check
@@ -285,10 +286,10 @@ def runReport(QUIET, DEBUG, org):
         cv1download = cvListBlob["data"][1]["links"]["download"]
 
         if cv0 and cv0download and cv1 and cv1download:
-          print(f'{bcolors.Green}run.{bcolors.BCyan}Latest CV:                 {bcolors.BCyan}{cv0}{bcolors.Endc}')
-          print(f'{bcolors.Green}run.{bcolors.BCyan}Latest CV Download:        {bcolors.BCyan}{cv0download}{bcolors.Endc}')
-          print(f'{bcolors.Green}run.{bcolors.BCyan}Previous CV:               {bcolors.BCyan}{cv1}{bcolors.Endc}')
-          print(f'{bcolors.Green}run.{bcolors.BCyan}Previous CV Download:      {bcolors.BCyan}{cv1download}{bcolors.Endc}')
+          print(f'{bcolors.Green}run.{bcolors.BCyan}Latest Config Version:        {bcolors.BBlue}{cv0}{bcolors.Endc}')
+          print(f'{bcolors.Green}run.{bcolors.BCyan}Latest Config Version Path:   {bcolors.BCyan}{cv0download}{bcolors.Endc}')
+          print(f'{bcolors.Green}run.{bcolors.BCyan}Previous Config Version:      {bcolors.BBlue}{cv1}{bcolors.Endc}')
+          print(f'{bcolors.Green}run.{bcolors.BCyan}Previous Config Version Path: {bcolors.BCyan}{cv1download}{bcolors.Endc}')
 
         cv0blobDownloadCheck = callTFE(QUIET, DEBUG, f'/configuration-versions/{cv0}/download', cv0tgzPath)
         if cv0blobDownloadCheck != 'OK':
@@ -358,69 +359,71 @@ def runReport(QUIET, DEBUG, org):
           exit(1)
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                  {bcolors.BYellow}{runBlob["data"][0]["attributes"]["canceled-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                     {bcolors.BYellow}{runBlob["data"][0]["attributes"]["canceled-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                  {bcolors.BCyan}Not canceled{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                     {bcolors.BCyan}Not canceled{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Created:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["created-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Created:                      {bcolors.BCyan}{runBlob["data"][0]["attributes"]["created-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Created:                   {bcolors.BYellow}Not Created{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Created:                      {bcolors.BYellow}Not Created{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queueable:            {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["plan-queueable-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queueable:               {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["plan-queueable-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queueable:            {bcolors.BYellow}Not Queueable{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queueable:               {bcolors.BYellow}Not Queueable{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queued:               {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["plan-queued-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queued:                  {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["plan-queued-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queued:               {bcolors.BYellow}Not Queued{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Plan Queued:                  {bcolors.BYellow}Not Queued{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Planning:                  {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["planning-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Planning:                     {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["planning-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Planning:                  {bcolors.BYellow}Not Planned{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Planning:                     {bcolors.BYellow}Not Planned{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Planned:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["planned-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Planned:                      {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["planned-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Planned:                   {bcolors.BYellow}Not Planned{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Planned:                      {bcolors.BYellow}Not Planned{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Apply Queued:              {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["apply-queued-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Apply Queued:                 {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["apply-queued-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Apply Queued:              {bcolors.BYellow}No Apply Queued{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Apply Queued:                 {bcolors.BYellow}No Apply Queued{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Applying:                  {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applying-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applying:                     {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applying-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Applying:                  {bcolors.BYellow}Not Applied{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applying:                     {bcolors.BYellow}Not Applied{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Confirmed:                 {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["confirmed-at"]}{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Confirmed:                    {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["confirmed-at"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Confirmed:                 {bcolors.BYellow}Not Confirmed{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Confirmed:                    {bcolors.BYellow}Not Confirmed{bcolors.Endc}')
 
       try:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applied-at"]}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                      {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applied-at"]}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BYellow}Not Applied{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                      {bcolors.BYellow}Not Applied{bcolors.Endc}')
 
       try:
         if runBlob["data"][0]["attributes"]["status"] == "applied":
-          print(f'{bcolors.Green}run.{bcolors.BCyan}Status (Outcome):          {bcolors.Default}applied{bcolors.Endc}')
+          print(f'{bcolors.Green}run.{bcolors.BCyan}Status (Outcome):             {bcolors.Default}applied{bcolors.Endc}')
         else:
-          print(f'{bcolors.Green}run.{bcolors.BCyan}Status (Outcome):          {bcolors.BYellow}{runBlob["data"][0]["attributes"]["status"]}{bcolors.Endc}')
+          print(f'{bcolors.Green}run.{bcolors.BCyan}Status (Outcome):             {bcolors.BYellow}{runBlob["data"][0]["attributes"]["status"]}{bcolors.Endc}')
       except KeyError:
-        print(f'{bcolors.Green}run.{bcolors.BCyan}Status (Outcome):          {bcolors.BRed}UNKNOWN{bcolors.Endc}')
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Status (Outcome):             {bcolors.BRed}UNKNOWN{bcolors.Endc}')
       #
       ## If state changed then diff from the previous run - essentially repeat the equivalent from the configuration version diffs from above
       #
-      # try:
-      #   if
+      try:
+        if workspaces[key]["can-read-state-versions"] == "true":
+          print(f'{bcolors.Green}state.{bcolors.BCyan}Applied:                   {bcolors.BCyan}{runBlob["data"][0]["attributes"]["status-timestamps"]["applied-at"]}')
+      except KeyError:
+        print(f'{bcolors.Green}run.{bcolors.BCyan}Applied:                   {bcolors.BYellow}Not Applied{bcolors.Endc}')
 
-    print()
   if not QUIET:
     print()
 #
