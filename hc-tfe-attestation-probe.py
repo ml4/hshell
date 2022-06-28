@@ -32,10 +32,12 @@ rows, columns = os.popen('stty size', 'r').read().split()
 
 ## /var/tmp used as CIS benchmarking compliance means /tmp noexec
 #
-cv0tgzDir  = '/var/tmp/cv0'
-cv1tgzDir  = '/var/tmp/cv1'
-cv0tgzPath = '/var/tmp/cv0blob.tgz'
-cv1tgzPath = '/var/tmp/cv1blob.tgz'
+tfeProbeTmpDir0  =  '/var/tmp/tfeProbeTmpDir0'
+tfeProbeTmpDir1  =  '/var/tmp/tfeProbeTmpDir1'
+cv0tgzPath       =  '/var/tmp/cv0blob.tgz'
+cv1tgzPath       =  '/var/tmp/cv1blob.tgz'
+sv0Path          = f'{tfeProbeTmpDir0}/sv0blob.json'
+sv1Path          = f'{tfeProbeTmpDir1}/sv1blob.json'
 
 ############################################################################
 #
@@ -90,7 +92,7 @@ def drawLine():
 
 def handleDirectories(DEBUG, handle):
   if handle == 'create':
-    for dir in [ cv0tgzDir, cv1tgzDir ]:
+    for dir in [ tfeProbeTmpDir0, tfeProbeTmpDir1 ]:
       try:
         if DEBUG:
           drawLine()
@@ -102,7 +104,7 @@ def handleDirectories(DEBUG, handle):
         print(error)
         exit(1)
   elif handle == 'delete':
-    for dir in [ cv0tgzDir, cv1tgzDir ]:
+    for dir in [ tfeProbeTmpDir0, tfeProbeTmpDir1 ]:
       try:
         if DEBUG:
           drawLine()
@@ -131,10 +133,12 @@ def handleDirectories(DEBUG, handle):
 def callTFE(QUIET, DEBUG, path, downloadPath=''):
   if not path:
     print(f'{bcolors.BRed}No TFE API in calling path{bcolors.Endc}')
+    handleDirectories(DEBUG, 'delete')
     exit(1)
 
   if not QUIET and DEBUG:
-    print(f'{bcolors.Magenta}Calling TFE with {TFE_ADDR}/api/v2{path}{bcolors.Endc}')
+    print(f'{bcolors.Magenta}Calling TFE with {path}{bcolors.Endc}')
+    print(f'{bcolors.Magenta}Download path:   {downloadPath}{bcolors.Endc}')
     print()
 
   headers = {
@@ -142,37 +146,108 @@ def callTFE(QUIET, DEBUG, path, downloadPath=''):
     'Content-Type':  'application/vnd.api+json'
   }
   try:
-    response = requests.get(f'{TFE_ADDR}/api/v2{path}', headers=headers)
+    response = requests.get(f'{path}', headers=headers)
   except Exception as e:
     print()
-    print(f'{bcolors.BRed}ERROR with requests to {TFE_ADDR}/api/v2{path}:')
+    print(f'{bcolors.BRed}ERROR with requests to {path}:')
     print(e)
     print(f'{bcolors.Endc}')
+    handleDirectories(DEBUG, 'delete')
     exit(1)
+
+  ## handle response code
+  #
+  if DEBUG:
+    if response.status_code >= 400:
+      print(f'{bcolors.BRed}API Request Response code: {response.status_code}')
+    else:
+      print(f'{bcolors.BMagenta}API Request Response code: {response.status_code}')
 
   ## detect output gzip file (which is the only type this script handles) or marshall
   #
-  if not downloadPath:
+  if response.status_code == 200:
+    if not downloadPath or downloadPath == '':
+      j = response.json()
+      if DEBUG:
+        print()
+        print(f'{bcolors.BYellow}{json.dumps(j)}{bcolors.Endc}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
+        print()
+      return(j)
+    elif downloadPath.endswith('tgz'):
+      try:
+        data = zlib.decompress(response.content, zlib.MAX_WBITS|32)
+        with open(downloadPath,'wb') as outFile:
+          outFile.write(data)
+      except Exception as e:
+        print()
+        print(f'{bcolors.BRed}ERROR writing to {downloadPath}:')
+        print(e)
+        print(f'{bcolors.Endc}')
+        handleDirectories(DEBUG, 'delete')
+        exit(1)
+      return('OK')
+    elif downloadPath.endswith('json'):
+      try:
+        j = response.json()
+        with open(downloadPath,'w') as outFile:
+          outFile.write(json.dumps(j))
+        if DEBUG:
+          print(f'{bcolors.BGreen}DOWNLOADED STATE VERSION OK{bcolors.Endc}')
+          print()
+          print(f'{bcolors.BYellow}{json.dumps(j)}{bcolors.Endc}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
+          print()
+      except Exception as e:
+        print()
+        print(f'{bcolors.BRed}ERROR writing to {downloadPath}:')
+        print(e)
+        print(f'{bcolors.Endc}')
+        handleDirectories(DEBUG, 'delete')
+        exit(1)
+  elif response.status_code >= 400:
     j = response.json()
-    if DEBUG:
-      print()
-      print(f'{json.dumps(j)}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
-      print()
-    return(j)
-  else:
-    try:
-      data = zlib.decompress(response.content, zlib.MAX_WBITS|32)
-      with open(downloadPath,'wb') as outFile:
-        outFile.write(data)
-    except Exception as e:
-      print()
-      print(f'{bcolors.BRed}ERROR writing to {downloadPath}:')
-      print(e)
-      print(f'{bcolors.Endc}')
-      exit(1)
-    return('OK')
+    print()
+    print(f'{bcolors.BYellow}{json.dumps(j)}{bcolors.Endc}')  # in order to put it out to https://codeamaze.com/web-viewer/json-explorer to make sense
+    print()
+    handleDirectories(DEBUG, 'delete')
+    exit(response.status_code)
 #
 ## End Func callTFE
+
+############################################################################
+#
+# def runDiff
+#
+############################################################################
+
+## Diff config or state; had probs with difflib output so dropped to CLI for brevity
+#
+def runDiff(QUIET, DEBUG, tfeProbeTmpDir0, tfeProbeTmpDir1, fileType=False):
+  if fileType == "state":
+    try:
+      os.system(f'terraform state list -state={sv0Path} > {tfeProbeTmpDir0}/sv0blob.tfstate')
+      with open(f'{tfeProbeTmpDir0}/sv0blob.tfstate', 'r') as file:
+        sv0 = file.read()
+      os.system(f'terraform state list -state={sv1Path} > {tfeProbeTmpDir1}/sv1blob.tfstate')
+      with open(f'{tfeProbeTmpDir1}/sv1blob.tfstate', 'r') as file:
+        sv1 = file.read()
+      os.system(f'diff -dabEBur {tfeProbeTmpDir0}/sv0blob.tfstate {tfeProbeTmpDir1}/sv1blob.tfstate')
+    except Exception as error:
+      print(f'{bcolors.BRed}ERROR: Failed to diff state files {tfeProbeTmpDir0}/sv0blob.tfstate and {tfeProbeTmpDir1}/sv1blob.tfstate.{bcolors.Endc}. Exiting here')
+      print(error)
+      print(f'{bcolors.Endc}')
+      handleDirectories(DEBUG, 'delete')
+      exit(1)
+  else:
+    try:
+      os.system(f'diff -dabEBur {tfeProbeTmpDir0} {tfeProbeTmpDir1}')
+    except Exception as error:
+      print(f'{bcolors.BRed}ERROR: Failed to diff configurations {tfeProbeTmpDir0} and {tfeProbeTmpDir1}.{bcolors.Endc}. Exiting here')
+      print(error)
+      print(f'{bcolors.Endc}')
+      handleDirectories(DEBUG, 'delete')
+      exit(1)
+#
+## End Func runDiff
 
 ############################################################################
 #
@@ -192,19 +267,20 @@ def runReport(QUIET, DEBUG, org):
 
   ## Get TFE version and ensure it is recent enough to download config versions
   #
-  releaseBlob = callTFE(QUIET, DEBUG, f'/admin/release')
+  releaseBlob = callTFE(QUIET, DEBUG, f'{TFE_ADDR}/api/v2/admin/release')
   print(f'{bcolors.Green}TFE.{bcolors.Default}Release:          {bcolors.BMagenta}{releaseBlob["release"]}{bcolors.Endc}')
   print
   yearMonth = int(releaseBlob["release"][1:7])
   if yearMonth < 202203:
     print()
     print(f'{bcolors.BRed}ERROR: Your TFE release version ({releaseBlob["release"]}) needs to be >= 202203-1 in order to be able to download the configuration versions required to putative understand changes. Exiting here')
+    handleDirectories(DEBUG, 'delete')
     exit(1)
 
   ## Initial workspace items
   #
   workspaces = {}
-  workspaceBlob = callTFE(QUIET, DEBUG, f'/organizations/{org}/workspaces')
+  workspaceBlob = callTFE(QUIET, DEBUG, f'{TFE_ADDR}/api/v2/organizations/{org}/workspaces')
   for array_obj in workspaceBlob["data"]:
     workspaces[array_obj["attributes"]["name"]] = {
       'id':                      f'{array_obj["id"]}',
@@ -235,7 +311,7 @@ def runReport(QUIET, DEBUG, org):
     #
     ## Run data
     #
-    runBlob = callTFE(QUIET, DEBUG, f'/workspaces/{workspaces[key]["id"]}/runs?page%5Bsize%5D=1')
+    runBlob = callTFE(QUIET, DEBUG, f'{TFE_ADDR}/api/v2/workspaces/{workspaces[key]["id"]}/runs?page%5Bsize%5D=1')
     if len(runBlob["data"]) == 0:
       print(f'{bcolors.Green}run.{bcolors.BCyan}Last Run:                      {bcolors.BYellow}No runs yet{bcolors.Endc}')
     else:
@@ -251,18 +327,33 @@ def runReport(QUIET, DEBUG, org):
       #   print(f'{bcolors.Green}run.{bcolors.BCyan}Configuration Version:        {bcolors.BRed}No configuration version found!{bcolors.Endc}')
       #
       ## if we have a configuration that begins with 'cv', hit the API again and get the configuration version data:
-      ##   - as we have a configuration version, get a list of configuration versions and ensure there are two
+      ##   - as we have a configuration version, get a list of configuration versions and ensure there are at least two
       ##   - get the previous configuration version
       ##   - show both configuration versions = get links to the blobs containing the configuration data
       ##   - get each blob
       ##   - diff the blobs and output
+
+
+
+
+
+
+      ## outstanding: if there is only one version, then there is no need to do a diff
+
+
+
+
+
+
+
       #
       try:
         if runBlob["data"][0]["relationships"]["configuration-version"]["data"]["id"].startswith("cv-"):
-          cvListBlob = callTFE(QUIET, DEBUG, f'/workspaces/{workspaces[key]["id"]}/configuration-versions')
+          cvListBlob = callTFE(QUIET, DEBUG, f'{TFE_ADDR}/api/v2/workspaces/{workspaces[key]["id"]}/configuration-versions')
 
           if len(cvListBlob) == 0:
             print(f'{bcolors.BRed}ERROR: Configuration version list blob is empty, but configuration version {runBlob["data"][0]["relationships"]["configuration-version"]["data"]["id"]} detected.{bcolors.Endc}. Exiting here')
+            handleDirectories(DEBUG, 'delete')
             exit(1)
           elif len(cvListBlob) == 1:
             firstCV = True  # see below when we diff the blobs
@@ -275,6 +366,7 @@ def runReport(QUIET, DEBUG, org):
         # OK we have >1 configuration versions: get the second one in the array (1) - we already have element 0, but check
         if runBlob["data"][0]["relationships"]["configuration-version"]["data"]["id"] != cvListBlob["data"][0]["id"]:
           print(f'{bcolors.BRed}ERROR: Configuration version ({runBlob["data"][0]["relationships"]["configuration-version"]["data"]["id"]}) is different from element 0 in the configuration versions blob ({cvListBlob["data"][0]["id"]}).{bcolors.Endc}. Exiting here')
+          handleDirectories(DEBUG, 'delete')
           exit(1)
         cv0 = cvListBlob["data"][0]["id"]
         cv0download = cvListBlob["data"][0]["links"]["download"]
@@ -287,24 +379,27 @@ def runReport(QUIET, DEBUG, org):
           print(f'{bcolors.Green}run.{bcolors.BCyan}Previous Config Version ID:    {bcolors.BBlue}{cv1}{bcolors.Endc}')
           print(f'{bcolors.Green}run.{bcolors.BCyan}Previous Config Version Path:  {bcolors.BCyan}{cv1download}{bcolors.Endc}')
 
-        cv0blobDownloadCheck = callTFE(QUIET, DEBUG, f'/configuration-versions/{cv0}/download', cv0tgzPath)
+        cv0blobDownloadCheck = callTFE(QUIET, DEBUG, f'{TFE_ADDR}/api/v2/configuration-versions/{cv0}/download', cv0tgzPath)
         if cv0blobDownloadCheck != 'OK':
           print(f'{bcolors.BRed}ERROR: Download configuration version 0 {cv0} failed.{bcolors.Endc}. Exiting here')
+          handleDirectories(DEBUG, 'delete')
           exit(1)
-        cv1blobDownloadCheck = callTFE(QUIET, DEBUG, f'/configuration-versions/{cv1}/download', cv1tgzPath)
+        cv1blobDownloadCheck = callTFE(QUIET, DEBUG, f'{TFE_ADDR}/api/v2/configuration-versions/{cv1}/download', cv1tgzPath)
         if cv0blobDownloadCheck != 'OK':
           print(f'{bcolors.BRed}ERROR: Download configuration version 0 {cv0} failed.{bcolors.Endc}. Exiting here')
+          handleDirectories(DEBUG, 'delete')
           exit(1)
 
         ## untar both tgz files and diff
         #
-        print(f'{bcolors.Green}config.{bcolors.BCyan}Configuration Changes:{bcolors.Endc}')
+        print(f'{bcolors.Green}config.{bcolors.BCyan}Configuration Changes:{bcolors.Endc}\n')
         try:
           cv0tgzFH = tarfile.open(cv0tgzPath)
         except Exception as error:
           print(f'{bcolors.BRed}ERROR: Failed to open tar file {cv0tgzPath}.{bcolors.Endc}. Exiting here')
           print(error)
           print(f'{bcolors.Endc}')
+          handleDirectories(DEBUG, 'delete')
           exit(1)
         try:
           cv1tgzFH = tarfile.open(cv1tgzPath)
@@ -312,26 +407,29 @@ def runReport(QUIET, DEBUG, org):
           print(f'{bcolors.BRed}ERROR: Failed to open tar file {cv1tgzPath}.{bcolors.Endc}. Exiting here')
           print(error)
           print(f'{bcolors.Endc}')
+          handleDirectories(DEBUG, 'delete')
           exit(1)
 
         ## extract dumps
         #
         try:
-          cv0tgzFH.extractall(cv0tgzDir)
+          cv0tgzFH.extractall(tfeProbeTmpDir0)
           cv0tgzFH.close()
         except FileExistsError as error:
           print(f'{bcolors.BRed}ERROR: Failed to extract configuration tar file {cv0tgzPath}.{bcolors.Endc}. Exiting here')
           print(error)
           print(f'{bcolors.Endc}')
+          handleDirectories(DEBUG, 'delete')
           exit(1)
 
         try:
-          cv1tgzFH.extractall(cv1tgzDir)
+          cv1tgzFH.extractall(tfeProbeTmpDir1)
           cv1tgzFH.close()
         except FileExistsError as error:
           print(f'{bcolors.BRed}ERROR: Failed to extract configuration tar file {cv1tgzPath}.{bcolors.Endc}. Exiting here')
           print(error)
           print(f'{bcolors.Endc}')
+          handleDirectories(DEBUG, 'delete')
           exit(1)
 
         try:
@@ -341,18 +439,29 @@ def runReport(QUIET, DEBUG, org):
           print(f'{bcolors.BRed}ERROR: Failed to remove configuration tar files {cv0tgzPath} and {cv1tgzPath}.{bcolors.Endc}. Exiting here')
           print(error)
           print(f'{bcolors.Endc}')
+          handleDirectories(DEBUG, 'delete')
           exit(1)
 
         ## diff dirs
         #
-        try:
-          for line in difflib.unified_diff(cv0tgzDir, cv1tgzDir, fromfile=cv0tgzDir, tofile=cv1tgzDir, lineterm='', n=0):
-            print(line)
-        except Exception as error:
-          print(f'{bcolors.BRed}ERROR: Failed to diff configurations {cv0tgzDir} and {cv1tgzDir}.{bcolors.Endc}. Exiting here')
-          print(error)
-          print(f'{bcolors.Endc}')
-          exit(1)
+        runDiff(QUIET, DEBUG, tfeProbeTmpDir0, tfeProbeTmpDir1)
+
+        ## empty dirs in case we diff state versions below
+        #
+        for dir in [ tfeProbeTmpDir0, tfeProbeTmpDir1 ]:
+          try:
+            if DEBUG:
+              drawLine()
+              print(f'{bcolors.Magenta}Emptying temporary directory: {dir}{bcolors.Endc}')
+            for root, dirs, files in os.walk(dir):
+              for file in files:
+                  os.remove(os.path.join(root, file))
+          except OSError as error:
+            print()
+            print(f'{bcolors.BRed}ERROR: failed to empty temporary dir {emptyPath}:{bcolors.Endc}')
+            print(error)
+            handleDirectories(DEBUG, 'delete')
+            exit(1)
 
       try:
         print(f'{bcolors.Green}run.{bcolors.BCyan}Canceled:                      {bcolors.BYellow}{runBlob["data"][0]["attributes"]["canceled-at"]}{bcolors.Endc}')
@@ -419,19 +528,27 @@ def runReport(QUIET, DEBUG, org):
           #
           ## Use the State Versions API rather than the workspaces API because it has everything we need for this section in it
           #
-          stateVersionsBlob = callTFE(QUIET, DEBUG, f'/state-versions?filter%5Bworkspace%5D%5Bname%5D={key}&filter%5Borganization%5D%5Bname%5D={org}')
+          stateVersionsBlob = callTFE(QUIET, DEBUG, f'{TFE_ADDR}/api/v2/state-versions?filter%5Bworkspace%5D%5Bname%5D={key}&filter%5Borganization%5D%5Bname%5D={org}')
       except KeyError:
         print(f'{bcolors.BRed}ERROR: Cannot find permission can-read-state-versions yet there is data in /organizations/{org}/workspaces API call. Probably a mishandling in the script. Exiting here')
         print(error)
         print(f'{bcolors.Endc}')
+        handleDirectories(DEBUG, 'delete')
         exit(1)
 
       ## state data
+      ## if we have a state versio that begins with 'sv', hit the API again and get the state version data:
+      ##   - as we have a state version, get a list of state versions and ensure there are at least two
+      ##   - get the previous configuration version
+      ##   - show both configuration versions = get links to the blobs containing the configuration data
+      ##   - get each blob
+      ##   - diff the blobs and output
+      ##   - if there is only one state version in the history, no need to do a diff
       #
       try:
-        if stateVersionsBlob["data"][0]["id"]:
+        if stateVersionsBlob["data"][0]["id"] and stateVersionsBlob["data"][0]["id"].startswith("sv-"):
           print(f'{bcolors.Green}state.{bcolors.BCyan}Latest State Version ID:     {bcolors.BBlue}{stateVersionsBlob["data"][0]["id"]}{bcolors.Endc}')
-          print(f'{bcolors.Green}state.{bcolors.BCyan}Latest State Version Path:   {bcolors.BCyan}{stateVersionsBlob["data"][0]["attributes"]["hosted-state-download-url"]}{bcolors.Endc}')
+          # print(f'{bcolors.Green}state.{bcolors.BCyan}Latest State Version Path:   {bcolors.BCyan}{stateVersionsBlob["data"][0]["attributes"]["hosted-state-download-url"]}{bcolors.Endc}')
           print(f'{bcolors.Green}state.{bcolors.BCyan}Latest State Version S/N:    {bcolors.BCyan}{stateVersionsBlob["data"][0]["attributes"]["serial"]}{bcolors.Endc}')
       except KeyError:
           print(f'{bcolors.Green}state.{bcolors.BCyan}Latest Version:              {bcolors.BYellow}No Latest State Version{bcolors.Endc}')
@@ -439,10 +556,24 @@ def runReport(QUIET, DEBUG, org):
       try:
         if stateVersionsBlob["data"][1]["id"]:
           print(f'{bcolors.Green}state.{bcolors.BCyan}Previous State Version ID:   {bcolors.BBlue}{stateVersionsBlob["data"][1]["id"]}{bcolors.Endc}')
-          print(f'{bcolors.Green}state.{bcolors.BCyan}Previous State Version Path: {bcolors.BCyan}{stateVersionsBlob["data"][1]["attributes"]["hosted-state-download-url"]}{bcolors.Endc}')
+          # print(f'{bcolors.Green}state.{bcolors.BCyan}Previous State Version Path: {bcolors.BCyan}{stateVersionsBlob["data"][1]["attributes"]["hosted-state-download-url"]}{bcolors.Endc}')
           print(f'{bcolors.Green}state.{bcolors.BCyan}Previous State Version S/N:  {bcolors.BCyan}{stateVersionsBlob["data"][1]["attributes"]["serial"]}{bcolors.Endc}')
       except KeyError:
-          print(f'{bcolors.Green}state.{bcolors.BCyan}Latest Version:              {bcolors.BYellow}No Latest State Version{bcolors.Endc}')
+          print(f'{bcolors.Green}state.{bcolors.BCyan}Previous Version:            {bcolors.BYellow}No Previous State Version{bcolors.Endc}')
+
+      if runBlob["data"][0]["attributes"]["status"] == "applied" and runBlob["data"][1]["attributes"]["status"] == "applied":
+        sv0 = stateVersionsBlob["data"][0]["id"]
+        sv0download = stateVersionsBlob["data"][0]["attributes"]["hosted-state-download-url"]
+        sv1 = stateVersionsBlob["data"][1]["id"]
+        sv1download = stateVersionsBlob["data"][1]["attributes"]["hosted-state-download-url"]
+
+        sv0blob = callTFE(QUIET, DEBUG, f'{sv0download}', sv0Path)
+        sv1blob = callTFE(QUIET, DEBUG, f'{sv1download}', sv1Path)
+
+        print(f'{bcolors.Green}config.{bcolors.BCyan}State Differences:{bcolors.Endc}\n')
+        runDiff(QUIET, DEBUG, tfeProbeTmpDir0, tfeProbeTmpDir1, "state")
+      else:
+        print(f'{bcolors.Green}config.{bcolors.BCyan}State Differences:          {bcolors.BYellow}N/A as one of the last two runs were not applied{bcolors.Endc}\n')
 
   if not QUIET:
     print()
@@ -527,19 +658,11 @@ def main():
       print(f'{bcolors.BRed}ERROR: Please supply an org name with -o{bcolors.Endc}')
       exit(1)
 
-
-    ## need more time with argparse to work out how to improve this
-    #
-    # if not system and not namespace:
-    #   print(f'{bcolors.BCyan}Start with:\n{bcolors.Endc}')
-    #   print(f'{bcolors.BCyan}hc-vault-probe.py -h{bcolors.Endc}')
-    #   exit(1)
-
-    ## handle temporary configuration directories and call
+    ## handle temporary directories and call
     #
     handleDirectories(DEBUG, 'create')
     runReport(QUIET, DEBUG, org)
-    handleDirectories(DEBUG, 'delete')
+    # handleDirectories(DEBUG, 'delete')
 #
 ## End Func main
 
