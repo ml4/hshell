@@ -662,7 +662,7 @@ def main():
     #
     handleDirectories(DEBUG, 'create')
     runReport(QUIET, DEBUG, org)
-    # handleDirectories(DEBUG, 'delete')
+    handleDirectories(DEBUG, 'delete')
 #
 ## End Func main
 
