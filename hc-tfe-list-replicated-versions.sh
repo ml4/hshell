@@ -40,7 +40,7 @@ function log {
 function main {
   URL="https://release-notes.replicated.com"
 
-  log "INFO" ${FUNCNAME[0]} "Listing versions of Replicated available for download"
+  log "INFO" "${FUNCNAME[0]}" "Listing versions of Replicated available for download"
   curl -Ss ${URL} | grep blog-post-title | awk -F '>' '{print $2}' | awk -F '<' '{print $1}'
 }
 

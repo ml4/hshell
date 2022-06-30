@@ -54,13 +54,13 @@ function log {
 function main {
   if [[ -z "${TFE_LICENSE_ID}" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Please Set TFE_LICENSE_ID Environment Variable"
+    log "ERROR" "${FUNCNAME[0]}" "Please Set TFE_LICENSE_ID Environment Variable"
     usage
   fi
 
   if [[ -z "${TFE_AIRGAP_DOWNLOAD_PASSWD}" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Please Set TFE_AIRGAP_DOWNLOAD_PASSWD Environment Variable"
+    log "ERROR" "${FUNCNAME[0]}" "Please Set TFE_AIRGAP_DOWNLOAD_PASSWD Environment Variable"
     usage
   fi
 
@@ -80,14 +80,14 @@ function main {
   then
     if [[ ! ${all_releases} ]]
     then
-      log "WARN" ${FUNCNAME[0]} "Curl of TFE release versions returned nothing.  Check licence ID or contact your customer success manager"
+      log "WARN" "${FUNCNAME[0]}" "Curl of TFE release versions returned nothing.  Check licence ID or contact your customer success manager"
       exit 1
     fi
-    log "INFO" ${FUNCNAME[0]} "Got all TFE versions visible to this licence ID"
+    log "INFO" "${FUNCNAME[0]}" "Got all TFE versions visible to this licence ID"
     echo "Seq  TFE Version"
     echo ${all_releases} | jq -r '.releases[:50] | .[] | "\(.release_sequence)  \(.label)"'
   else
-    log "ERROR" ${FUNCNAME[0]} "Curl of TFE release versions errored"
+    log "ERROR" "${FUNCNAME[0]}" "Curl of TFE release versions errored"
     exit ${rCode}
   fi
 }

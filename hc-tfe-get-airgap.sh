@@ -55,19 +55,19 @@ function main {
 
   if [[ -z "${TFE_LICENSE_ID}" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Please Set TFE_LICENSE_ID Environment Variable"
+    log "ERROR" "${FUNCNAME[0]}" "Please Set TFE_LICENSE_ID Environment Variable"
     usage
   fi
 
   if [[ -z "${TFE_AIRGAP_DOWNLOAD_PASSWD}" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Please Set TFE_AIRGAP_DOWNLOAD_PASSWD Environment Variable"
+    log "ERROR" "${FUNCNAME[0]}" "Please Set TFE_AIRGAP_DOWNLOAD_PASSWD Environment Variable"
     usage
   fi
 
   if [[ -z "${release_sequence}" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Please provide a release sequence number"
+    log "ERROR" "${FUNCNAME[0]}" "Please provide a release sequence number"
     usage
   fi
 
@@ -83,7 +83,7 @@ function main {
   rCode=$(echo ${response} | awk '{print $NF}')
   if [[ "${rCode}" != "200" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Curl to access sequence number list errored with code ${rCode}"
+    log "ERROR" "${FUNCNAME[0]}" "Curl to access sequence number list errored with code ${rCode}"
     exit ${rCode}
   else
     ## Cut the return code
@@ -101,11 +101,11 @@ function main {
   rCode=$(echo ${response} | awk '{print $NF}')
   if [[ "${rCode}" != "200" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Curl to access specific sequence number errored with code ${rCode}"
+    log "ERROR" "${FUNCNAME[0]}" "Curl to access specific sequence number errored with code ${rCode}"
     exit ${rCode}
   else
     replicated_release=$(echo ${response} | awk '{$NF=""; print $0}')
-    log "INFO" ${FUNCNAME[0]} "Got Replicated release"
+    log "INFO" "${FUNCNAME[0]}" "Got Replicated release"
   fi
 
   ## Get label from releases
@@ -113,30 +113,30 @@ function main {
   label=$(echo ${all_releases} | jq -r ".releases[] | select(.release_sequence == ${release_sequence}) | .label")
   if [[ -z "${label}" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "TFE release sequence not found"
+    log "ERROR" "${FUNCNAME[0]}" "TFE release sequence not found"
     exit 1
   fi
 
   url=$(echo ${replicated_release} | jq -r '.url')
   if [[ -z "${url}" ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "TFE download URL is empty"
+    log "ERROR" "${FUNCNAME[0]}" "TFE download URL is empty"
     exit 1
   fi
 
   filename="tfe_${label}_${release_sequence}.airgap"
 
-  log "INFO" ${FUNCNAME[0]} "Found TFE release:"
-  log "INFO" ${FUNCNAME[0]} "Sequence: ${release_sequence}"
-  log "INFO" ${FUNCNAME[0]} "Label: ${label}"
-  log "INFO" ${FUNCNAME[0]} "URL: ${url}"
-  log "INFO" ${FUNCNAME[0]} "Filename: ${filename}"
+  log "INFO" "${FUNCNAME[0]}" "Found TFE release:"
+  log "INFO" "${FUNCNAME[0]}" "Sequence: ${release_sequence}"
+  log "INFO" "${FUNCNAME[0]}" "Label: ${label}"
+  log "INFO" "${FUNCNAME[0]}" "URL: ${url}"
+  log "INFO" "${FUNCNAME[0]}" "Filename: ${filename}"
 
   curl -#o ${filename} ${url}
   rCode=${?}
   if [[ ${rCode} > 0 ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Curl to download TFE airgap errored"
+    log "ERROR" "${FUNCNAME[0]}" "Curl to download TFE airgap errored"
     exit ${rCode}
   fi
 }

@@ -51,19 +51,19 @@ function main {
   url="https://s3.amazonaws.com/replicated-airgap-work/stable/replicated-${version}%2B${version}%2B${version}.tar.gz"
   filename="replicated-${version}.tar.gz"
 
-  log "INFO" ${FUNCNAME[0]} "Accessing Replicated:"
-  log "INFO" ${FUNCNAME[0]} "  Version: ${version}"
-  log "INFO" ${FUNCNAME[0]} "  URL: ${url}"
-  log "INFO" ${FUNCNAME[0]} "  Filename: ${filename}"
+  log "INFO" "${FUNCNAME[0]}" "Accessing Replicated:"
+  log "INFO" "${FUNCNAME[0]}" "  Version: ${version}"
+  log "INFO" "${FUNCNAME[0]}" "  URL: ${url}"
+  log "INFO" "${FUNCNAME[0]}" "  Filename: ${filename}"
 
   curl -L#o ${filename} ${url}
   rCode=${?}
   if [[ ${rCode} > 0 ]]
   then
-    log "ERROR" ${FUNCNAME[0]} "Problem with the cURL command. Stopping"
+    log "ERROR" "${FUNCNAME[0]}" "Problem with the cURL command. Stopping"
     exit ${rCode}
   else
-    log "INFO" ${FUNCNAME[0]} "Download of ${filename} succeeded."
+    log "INFO" "${FUNCNAME[0]}" "Download of ${filename} succeeded."
   fi
 }
 
