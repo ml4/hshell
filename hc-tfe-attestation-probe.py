@@ -12,6 +12,7 @@
 import argparse
 import shutil
 import os
+import subprocess
 import requests
 import json
 import zlib
@@ -230,7 +231,19 @@ def runDiff(QUIET, DEBUG, tfeProbeTmpDir0, tfeProbeTmpDir1, fileType=False):
       os.system(f'terraform state list -state={sv1Path} > {tfeProbeTmpDir1}/sv1blob.tfstate')
       with open(f'{tfeProbeTmpDir1}/sv1blob.tfstate', 'r') as file:
         sv1 = file.read()
-      os.system(f'diff -dabEBur {tfeProbeTmpDir0}/sv0blob.tfstate {tfeProbeTmpDir1}/sv1blob.tfstate')
+
+      child = subprocess.run([f'diff -dabEBur {tfeProbeTmpDir0}/sv0blob.tfstate {tfeProbeTmpDir1}/sv1blob.tfstate'], capture_output=True, shell=True)
+      output = str(child.stdout, 'utf-8')
+      error  = str(child.stderr, 'utf-8')
+
+      if output == '' and error == '':
+        print(f'{bcolors.Green}config.{bcolors.BCyan}Configuration Changes:       {bcolors.BYellow}No difference{bcolors.Endc}')
+      elif output != '' and error == '':
+        print(f'{bcolors.Green}config.{bcolors.BCyan}Configuration Changes:{bcolors.BWhite}\n')
+        print(f'{output}{bcolors.Endc}')
+      elif error != '':
+        print(f'{bcolors.BRed}ERROR: {error}')
+        raise Exception
     except Exception as error:
       print(f'{bcolors.BRed}ERROR: Failed to diff state files {tfeProbeTmpDir0}/sv0blob.tfstate and {tfeProbeTmpDir1}/sv1blob.tfstate.{bcolors.Endc}. Exiting here')
       print(error)
@@ -239,7 +252,18 @@ def runDiff(QUIET, DEBUG, tfeProbeTmpDir0, tfeProbeTmpDir1, fileType=False):
       exit(1)
   else:
     try:
-      os.system(f'diff -dabEBur {tfeProbeTmpDir0} {tfeProbeTmpDir1}')
+      child = subprocess.run([f'diff -dabEBur {tfeProbeTmpDir0} {tfeProbeTmpDir1}'], capture_output=True, shell=True)
+      output = str(child.stdout, 'utf-8')
+      error  = str(child.stderr, 'utf-8')
+
+      if output == '' and error == '':
+        print(f'{bcolors.Green}config.{bcolors.BCyan}Configuration Changes:      {bcolors.BYellow}No difference{bcolors.Endc}')
+      elif output != '' and error == '':
+        print(f'{bcolors.Green}config.{bcolors.BCyan}Configuration Changes:{bcolors.BWhite}\n')
+        print(f'{output}{bcolors.Endc}')
+      elif error != '':
+        print(f'{bcolors.BRed}ERROR: {error}')
+        raise Exception
     except Exception as error:
       print(f'{bcolors.BRed}ERROR: Failed to diff configurations {tfeProbeTmpDir0} and {tfeProbeTmpDir1}.{bcolors.Endc}. Exiting here')
       print(error)
@@ -392,7 +416,6 @@ def runReport(QUIET, DEBUG, org):
 
         ## untar both tgz files and diff
         #
-        print(f'{bcolors.Green}config.{bcolors.BCyan}Configuration Changes:{bcolors.Endc}\n')
         try:
           cv0tgzFH = tarfile.open(cv0tgzPath)
         except Exception as error:
@@ -559,21 +582,7 @@ def runReport(QUIET, DEBUG, org):
           # print(f'{bcolors.Green}state.{bcolors.BCyan}Previous State Version Path: {bcolors.BCyan}{stateVersionsBlob["data"][1]["attributes"]["hosted-state-download-url"]}{bcolors.Endc}')
           print(f'{bcolors.Green}state.{bcolors.BCyan}Previous State Version S/N:  {bcolors.BCyan}{stateVersionsBlob["data"][1]["attributes"]["serial"]}{bcolors.Endc}')
       except KeyError:
-          print(f'{bcolors.Green}state.{bcolors.BCyan}Previous Version:            {bcolors.BYellow}No Previous State Version{bcolors.Endc}')
-
-      if runBlob["data"][0]["attributes"]["status"] == "applied" and runBlob["data"][1]["attributes"]["status"] == "applied":
-        sv0 = stateVersionsBlob["data"][0]["id"]
-        sv0download = stateVersionsBlob["data"][0]["attributes"]["hosted-state-download-url"]
-        sv1 = stateVersionsBlob["data"][1]["id"]
-        sv1download = stateVersionsBlob["data"][1]["attributes"]["hosted-state-download-url"]
-
-        sv0blob = callTFE(QUIET, DEBUG, f'{sv0download}', sv0Path)
-        sv1blob = callTFE(QUIET, DEBUG, f'{sv1download}', sv1Path)
-
-        print(f'{bcolors.Green}config.{bcolors.BCyan}State Differences:{bcolors.Endc}\n')
-        runDiff(QUIET, DEBUG, tfeProbeTmpDir0, tfeProbeTmpDir1, "state")
-      else:
-        print(f'{bcolors.Green}config.{bcolors.BCyan}State Differences:          {bcolors.BYellow}N/A as one of the last two runs were not applied{bcolors.Endc}\n')
+        print(f'{bcolors.Green}state.{bcolors.BCyan}Previous Version:            {bcolors.BYellow}No Previous State Version{bcolors.Endc}')
 
   if not QUIET:
     print()
