@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 ## hc-tfe-list-airgap-versions.sh
 ## TFE air gap version list

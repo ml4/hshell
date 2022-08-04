@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Complete script for API-driven runs.
 # Documentation can be found at:

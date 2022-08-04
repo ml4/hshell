@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 ## hc-tfe-get-replicated-versions.sh
 ## Replicated version list

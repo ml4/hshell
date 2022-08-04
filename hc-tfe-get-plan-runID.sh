@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 ## script to output the runID of a workspace including plan runID
 ## usage:
