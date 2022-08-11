@@ -68,20 +68,22 @@ function main {
       year=$(echo ${ts} | cut -d'/' -f3 | cut -d: -f1)
       time=$(echo ${ts} | cut -d: -f2-4)
       case ${month} in
-        January) mo='01' ;;
-        February) mo='02' ;;
-        March) mo='03' ;;
-        April) mo='04' ;;
+        Jan) mo='01' ;;
+        Feb) mo='02' ;;
+        Mar) mo='03' ;;
+        Apr) mo='04' ;;
         May) mo='05' ;;
-        June) mo='06' ;;
-        July) mo='07' ;;
-        August) mo='08' ;;
-        September) mo='09' ;;
-        October) mo='10' ;;
-        November) mo='11' ;;
-        December) mo='12' ;;
+        Jun) mo='06' ;;
+        Jul) mo='07' ;;
+        Aug) mo='08' ;;
+        Sep) mo='09' ;;
+        Oct) mo='10' ;;
+        Nov) mo='11' ;;
+        Dec) mo='12' ;;
         *)
-          echo "ERROR IN SCRIPT"
+          echo "ERROR IN SCRIPT on message:"
+          echo ${message}
+          echo
           exit 1
           ;;
       esac
