@@ -560,7 +560,7 @@ def runReport(QUIET, DEBUG, org):
         exit(1)
 
       ## state data
-      ## if we have a state versio that begins with 'sv', hit the API again and get the state version data:
+      ## if we have a state version that begins with 'sv', hit the API again and get the state version data:
       ##   - as we have a state version, get a list of state versions and ensure there are at least two
       ##   - get the previous configuration version
       ##   - show both configuration versions = get links to the blobs containing the configuration data
